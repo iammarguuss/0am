@@ -6,21 +6,23 @@ const defaultMasterFile = {
   files: [],
 };
 
-// Функция для обновления подписей в MasterFile
-const createMasterFileSignatures = async (
-  mf: IMasterFile
-): Promise<IMasterFile> => {
+const defaultContentFile = {
+  signatures: {},
+};
+
+// Function for updating signatures in MasterFile
+const createFileSignatures = async (mf: IFileData): Promise<IFileData> => {
   const newSignatures = generateSignatures(5);
 
   mf.signatures = newSignatures.reduce((acc, signature, index) => {
-    acc[index] = signature; // Начало нумерации с 0
+    acc[index] = signature; // Numbering starts from 0
     return acc;
   }, {} as ISignatures);
 
   return mf;
 };
 
-// Функция для генерации подписей
+// Function for generating signatures
 const generateSignatures = (signatureCount: number): string[] => {
   const signatures = [];
 
@@ -45,7 +47,7 @@ async function encryptFile(
   fileData = JSON.stringify(fileData);
   const encoder = new TextEncoder();
 
-  // Преобразуем пароль в ключ, используя PBKDF2
+  // Convert the password to a key using PBKDF2
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
@@ -54,7 +56,7 @@ async function encryptFile(
     ["deriveKey"]
   );
 
-  // Параметры для PBKDF2
+  // Parameters for PBKDF2
   const keyDeriveParams = {
     name: "PBKDF2",
     salt: pbkdf2Salt,
@@ -62,7 +64,7 @@ async function encryptFile(
     hash: "SHA-256",
   };
 
-  // Создание ключа для AES-GCM
+  // Generating a key for AES-GCM
   const key = await crypto.subtle.deriveKey(
     keyDeriveParams,
     keyMaterial,
@@ -71,16 +73,16 @@ async function encryptFile(
     ["encrypt"]
   );
 
-  // Шифрование файла
+  // File encryption
   const encryptedData = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     key,
     encoder.encode(fileData)
   );
 
-  // Формируем результат
+  // Form the result
   const result = {
-    encryptedData: encryptedData, // Зашифрованные данные как ArrayBuffer
+    encryptedData: encryptedData, // Encrypted data as ArrayBuffer
     params: {
       iterations: iterations,
       salt: Array.from(salt)
@@ -95,7 +97,7 @@ async function encryptFile(
     },
   };
 
-  // Возвращаем объект с ArrayBuffer и параметрами в JSON
+  // Return an object with ArrayBuffer and parameters in JSON
   return result;
 }
 
@@ -114,10 +116,10 @@ async function decryptFile(encryptedFile: IEncryptedFile, password: string) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
-  // Разбор JSON с зашифрованными данными и параметрами
+  // Parsing JSON with encrypted data and parameters
   const { encryptedData, params } = encryptedFile;
 
-  // Преобразуем параметры обратно из шестнадцатеричной строки в байты
+  // Convert the parameters back from a hexadecimal string to bytes
   const iv = new Uint8Array(
     (params.iv.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16))
   );
@@ -128,7 +130,7 @@ async function decryptFile(encryptedFile: IEncryptedFile, password: string) {
     (params.pbkdf2Salt.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16))
   );
 
-  // Импортируем пароль как ключ для PBKDF2
+  // Import password as key for PBKDF2
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
@@ -137,7 +139,7 @@ async function decryptFile(encryptedFile: IEncryptedFile, password: string) {
     ["deriveKey"]
   );
 
-  // Деривация ключа AES-GCM из пароля
+  // Deriving an AES-GCM key from a password
   const key = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
@@ -151,7 +153,7 @@ async function decryptFile(encryptedFile: IEncryptedFile, password: string) {
     ["decrypt"]
   );
 
-  // Расшифровка данных
+  // Data decryption
   const decryptedData = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv },
     key,
@@ -170,7 +172,7 @@ const newDecContentFile = async (
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  // Преобразование пароля в ключ (обеспечение нужной длины 256 бит)
+  // Converting a password to a key (ensuring the required length of 256 bits)
   const passwordBytes = encoder.encode(password).slice(0, 32);
   const key = await crypto.subtle.importKey(
     "raw",
@@ -184,7 +186,7 @@ const newDecContentFile = async (
     (iv.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16))
   );
 
-  // Расшифровка данных
+  // Data decryption
   const decryptedData = await crypto.subtle.decrypt(
     {
       name: "AES-CBC",
@@ -198,15 +200,15 @@ const newDecContentFile = async (
   const saltBytes = encoder.encode(salt);
   const saltedData = new Uint8Array(decryptedBytes.length);
 
-  // Применение операции XOR к расшифрованным данным
+  // Applying XOR operation to decrypted data
   for (let i = 0; i < decryptedBytes.length; i++) {
     saltedData[i] = decryptedBytes[i] ^ saltBytes[i % saltBytes.length];
   }
 
-  // Удаление 32 случайных байт из начала данных после XOR
+  // Remove 32 random bytes from the beginning of the data after XOR
   const originalData = saltedData.slice(32);
 
-  // Преобразование данных обратно в строку
+  // Converting data back to a string
   const jsonString = decoder.decode(originalData);
 
   try {
@@ -217,26 +219,25 @@ const newDecContentFile = async (
   }
 };
 
-export const generateNewPassForContentFile =
-  async (): Promise<IPasswordSettings> => {
-    // Генерация пароля
-    const passwordBuffer = crypto.getRandomValues(new Uint8Array(32)); // 24 байта = 32 символа в base64
-    const password = arrayBufferToBase64(passwordBuffer);
+const generateNewPassForContentFile = async (): Promise<IPasswordSettings> => {
+  // Generate password
+  const passwordBuffer = crypto.getRandomValues(new Uint8Array(32)); // 24 bytes = 32 characters in base64
+  const password = arrayBufferToBase64(passwordBuffer);
 
-    // Генерация IV
-    const ivBuffer = crypto.getRandomValues(new Uint8Array(16)); // 12 байт для IV
-    const iv = arrayBufferToHex(ivBuffer);
+  // Generation IV
+  const ivBuffer = crypto.getRandomValues(new Uint8Array(16)); // 12 bytes for IV
+  const iv = arrayBufferToHex(ivBuffer);
 
-    // Генерация соли
-    const saltBuffer = crypto.getRandomValues(new Uint8Array(32)); // 24 байта = 32 символа в base64
-    const salt = arrayBufferToBase64(saltBuffer);
+  // Salt generation
+  const saltBuffer = crypto.getRandomValues(new Uint8Array(32)); // 24 bytes = 32 characters in base64
+  const salt = arrayBufferToBase64(saltBuffer);
 
-    return {
-      password,
-      iv,
-      salt,
-    };
+  return {
+    password,
+    iv,
+    salt,
   };
+};
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -248,7 +249,7 @@ const arrayBufferToHex = (buffer: ArrayBuffer): string => {
     .join("");
 };
 
-export const newEncContentFile = async (
+const newEncContentFile = async (
   file: Record<string, unknown>,
   passwordSettings: IPasswordSettings
 ): Promise<Uint8Array> => {
@@ -257,28 +258,27 @@ export const newEncContentFile = async (
   const encoder = new TextEncoder();
   const data = encoder.encode(JSON.stringify(file));
 
-  // Генерация случайных байтов (32 байта)
+  // Generate random bytes (32 bytes)
   const randomBytes = crypto.getRandomValues(new Uint8Array(32));
 
-  // Создание нового массива для данных с дополнительными байтами
+  // Create a new array for data with extra bytes
   const newData = new Uint8Array(randomBytes.length + data.length);
   newData.set(randomBytes, 0);
   newData.set(data, randomBytes.length);
 
-  // Создание соли в виде байтового массива для XOR операции
+  // Creating a salt as a byte array for XOR operation
   const saltBytes = encoder.encode(salt);
   const saltedData = new Uint8Array(newData.length);
 
-  // Применение XOR между каждым байтом новых данных и солью
+  // Apply XOR between each byte of new data and the salt
   for (let i = 0; i < newData.length; i++) {
     saltedData[i] = newData[i] ^ saltBytes[i % saltBytes.length];
   }
 
-  // Преобразование пароля в ключ (обеспечение нужной длины 256 бит)
   const passwordBytes = encoder.encode(password).slice(0, 32);
   const key = await crypto.subtle.importKey(
     "raw",
-    passwordBytes, // Теперь пароль точно 256 бит
+    passwordBytes,
     { name: "AES-CBC" },
     false,
     ["encrypt"]
@@ -288,7 +288,6 @@ export const newEncContentFile = async (
     (iv.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16))
   );
 
-  // Шифрование солёных данных
   const encryptedData = await crypto.subtle.encrypt(
     {
       name: "AES-CBC",
@@ -314,38 +313,36 @@ export class Ulda {
 
   //   TODO make private
   async createMasterFile(): Promise<{ data?: IMasterFile; error?: string }> {
-    const masterfile = await createMasterFileSignatures(defaultMasterFile);
+    const masterfile = await createFileSignatures(defaultMasterFile);
     const encryptedFile = await encryptFile(masterfile, this.password);
     const hashSignatures = await this.generateLinkedHashes(
       masterfile.signatures
     );
 
-    if (this.socket) {
-      return new Promise((resolve) => {
-        this.socket.emit(
-          "master:init",
-          {
-            key: this.apiKey,
-            metadata: JSON.stringify(encryptedFile.params),
-            data: encryptedFile.encryptedData,
-            hash_signatures: JSON.stringify(hashSignatures),
-          },
-          // TODO check async
-          async (response: IMasterFileCreatedResponse) => {
-            const result = await this.onMasterCreated(response);
-            resolve(result);
-          }
-        );
-      });
-    } else {
-      return { error: "Error decrypting file" };
-    }
+    const socket = SocketApi.createConnection();
+
+    return new Promise((resolve) => {
+      socket.emit(
+        "master:init",
+        {
+          key: this.apiKey,
+          metadata: JSON.stringify(encryptedFile.params),
+          data: encryptedFile.encryptedData,
+          hash_signatures: JSON.stringify(hashSignatures),
+        },
+        async (response: IMasterFileCreatedResponse) => {
+          const result = await this.onMasterCreated(response);
+          socket.disconnect();
+          resolve(result);
+        }
+      );
+    });
   }
 
   private async onMasterCreated(
     response: IMasterFileCreatedResponse
   ): Promise<{ data?: IMasterFile; error?: string }> {
-    const masterfileData = response.masterfileData;
+    const masterfileData = response.data;
     const encryptedData: IEncryptedFile = {
       encryptedData: masterfileData.data,
       params: JSON.parse(masterfileData.metadata),
@@ -355,7 +352,36 @@ export class Ulda {
     return { data };
   }
 
-  async getMasterFile(): Promise<{ data?: IMasterFile; error?: string }> {
+  async getContent<T>(): Promise<{
+    data?: T;
+    error?: string;
+  }> {
+    const masterfileData = await this.getMasterFile();
+    const master = masterfileData.data;
+
+    if (!master) {
+      return { error: "Error" };
+    }
+
+    const filesData = await this.getContentFile(master);
+    const files = filesData.data;
+
+    if (files) {
+      const data: Record<string, unknown> = {};
+
+      files.forEach((i) => {
+        data[`${i.data.name}`] = i.data.content;
+      });
+      return { data: data as T };
+    }
+
+    return { error: "Error" };
+  }
+
+  private async getMasterFile(): Promise<{
+    data?: IMasterFile;
+    error?: string;
+  }> {
     return new Promise((resolve, reject) => {
       this.socket.emit(
         "master:get",
@@ -385,7 +411,7 @@ export class Ulda {
 
   async getContentFile(
     master: IMasterFile
-  ): Promise<{ data?: IContentFile[]; error?: string }> {
+  ): Promise<{ data?: any[]; error?: string }> {
     return new Promise((resolve, reject) => {
       this.socket.emit(
         "content:get",
@@ -478,7 +504,6 @@ export class Ulda {
     for (let d = 1; d < depth; d++) {
       chain[d] = {};
       for (let n = d + start; n <= end; n++) {
-        //chain[d][n] = sha(chain[d-1][n-1]+chain[d-1][n])
         chain[d][n] = await hashSHA256(chain[d - 1][n - 1] + chain[d - 1][n]);
       }
     }
@@ -490,91 +515,149 @@ export class Ulda {
     return after;
   }
 
-  // Функция для обновления подписей, удаляя старую и добавляя новую
-  private async stepUpSignaturesUpdate(
-    master: IMasterFile
-  ): Promise<IMasterFile> {
+  private async stepUpSignaturesUpdate(master: IFileData): Promise<IFileData> {
     const minId = Math.min(...Object.keys(master.signatures).map(Number));
 
-    // Удаление подписи с индексом 0
     delete master.signatures[minId];
 
-    // Генерация новой подписи и добавление её с индексом 10
     const newSignature = await generateSignatures(1);
     master.signatures[minId + 5] = newSignature[0];
 
     return master;
   }
 
-  async createContentFile(contentData: string): Promise<{
-    data?: { id: number; passwordSettings: IPasswordSettings };
-    error?: string;
-  }> {
+  async createContentFile(
+    contentData: string,
+    name: string
+  ): Promise<{ status: string; error?: string }> {
     return new Promise(async (resolve, reject) => {
       try {
         const passwordSettings = await generateNewPassForContentFile();
+        const contentFile = await createFileSignatures(defaultContentFile);
+
+        const cf = {
+          ...contentFile,
+          data: {
+            content: { ...JSON.parse(contentData) },
+            ...contentFile,
+            name,
+          },
+        };
+
         const encryptedContentFile = await newEncContentFile(
-          JSON.parse(contentData),
+          cf,
           passwordSettings
         );
+
+        const hashSignatures = await this.generateLinkedHashes(cf.signatures);
 
         this.socket.emit(
           "content:create",
           {
             data: encryptedContentFile,
+            hash_signatures: JSON.stringify(hashSignatures),
           },
-          (id: number) => {
-            resolve({ data: { id, passwordSettings } });
+          async (id: number) => {
+            const masterfileData = await this.getMasterFile();
+            const master = masterfileData.data;
+
+            if (master) {
+              master.files.push({
+                id,
+                ...passwordSettings,
+              });
+
+              await this.updateMasterFile(master);
+
+              resolve({ status: "OK" });
+            }
           }
         );
       } catch (error) {
-        reject({ error: "Error" });
+        reject({ status: "Error", error });
       }
     });
   }
 
-  async updateContentFile(
-    master: IMasterFile,
-    contentData: string,
-    id: number
+  async saveContentFile(
+    name: string,
+    content: Record<string, unknown>
   ): Promise<{
-    data?: { id: number; passwordSettings: IPasswordSettings };
+    data?: Record<string, unknown>;
     error?: string;
   }> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const passwordSettings = master.files.find(
-          (i: IPasswordSettings & { id: number }) => i.id === id
-        );
-        const fileData = JSON.parse(contentData);
-        const encryptedContentFile = await newEncContentFile(
-          fileData,
-          passwordSettings
-        );
+    const masterfileData = await this.getMasterFile();
+    const master = masterfileData.data;
 
-        this.socket.emit(
-          "content:update",
-          {
-            id: fileData.id,
-            data: encryptedContentFile,
-            // TODO validate before update
-            // key: apiKey,
-            // newHashes: hashes,
-          },
-          (id: number) => {
-            resolve({ data: { id, passwordSettings } });
-          }
-        );
-      } catch (error) {
-        reject({ error: "Error" });
-      }
-    });
+    if (!master) {
+      return { error: "Error" };
+    }
+
+    const filesData = await this.getContentFile(master);
+    const files = filesData.data;
+    const fileData = files?.find((f) => f.data.name === name);
+
+    if (fileData.data) {
+      const contentUpdated = await this.stepUpSignaturesUpdate({
+        ...fileData,
+        data: {
+          ...fileData.data,
+          content,
+        },
+      });
+
+      const hashes = await this.generateLinkedHashes(contentUpdated.signatures);
+      const passwordSettings = master.files.find(
+        (i: IPasswordSettings & { id: number }) => i.id === fileData.id
+      );
+      const encryptedContentFileData = await newEncContentFile(
+        contentUpdated,
+        passwordSettings
+      );
+
+      return new Promise((resolve, reject) => {
+        try {
+          this.socket.emit(
+            "content:update",
+            {
+              id: fileData.id,
+              data: encryptedContentFileData,
+              newHashes: hashes,
+            },
+            async (props: { data?: IEncryptedFile; error?: string }) => {
+              const { error } = props;
+
+              console.log("[saveContentFile] props: ", props);
+
+              if (error) {
+                reject({ error });
+              }
+
+              resolve({ data: content });
+            }
+          );
+        } catch (error) {
+          reject({ error: "Error" });
+        }
+      });
+    } else {
+      return { error: "File not found, please check name" };
+    }
   }
 }
 
-export interface IMasterFile {
+export interface IFileData extends Record<string, any> {
   signatures: any;
+  // files: Record<string, any>;
+}
+
+export interface IMasterFile extends IFileData {
   files: Record<string, any>;
+}
+
+export interface IContentFile extends IFileData {
+  id: number;
+  data: Buffer;
 }
 
 interface ISignatures {
@@ -595,7 +678,7 @@ interface IEncryptedFileParams {
 
 interface IMasterFileCreatedResponse {
   id: string;
-  masterfileData: { data: ArrayBuffer; metadata: string };
+  data: { data: ArrayBuffer; metadata: string };
 }
 
 interface IMasterfileResponse {
@@ -606,11 +689,6 @@ interface IMasterfileResponse {
 interface IMasterfileData {
   data: ArrayBuffer;
   metadata: string;
-}
-
-interface IContentFile {
-  id: number;
-  data: Buffer;
 }
 
 export interface IPasswordSettings {
