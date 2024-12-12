@@ -1,7 +1,10 @@
 {
   "name": "0am",
-  "private": true,
-  "version": "1.0.0",
+  "description": "Zero Access Management",
+  "author": "iammarguuss",
+  "license": "MIT",
+  "private": false,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
